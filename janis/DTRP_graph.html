@@ -109,6 +109,15 @@
   }
   .file-status.ok{color:#2e6e3f;}
   .file-status.err{color:#b23a2f;}
+  .dl-link{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--accent);
+    text-decoration:none;
+    border-bottom:1px dotted var(--accent);
+    width:fit-content;
+  }
+  .dl-link:hover{border-bottom-style:solid;}
 
   .range-inputs{
     display:flex;
@@ -133,6 +142,57 @@
     color:var(--sub);
     display:flex;
     justify-content:space-between;
+  }
+
+  /* --- axis settings panel --- */
+  .axis-panel{
+    display:flex;
+    flex-wrap:wrap;
+    gap:24px;
+    background:#fafaf7;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 16px;
+    margin-bottom:14px;
+  }
+  .axis-col{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-width:230px;
+  }
+  .axis-col .axis-col-title{
+    font-family:var(--mono);
+    font-size:10.5px;
+    font-weight:700;
+    letter-spacing:.05em;
+    color:var(--accent);
+    text-transform:uppercase;
+  }
+  .axis-field{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:12px;
+  }
+  .axis-field label.f-label{
+    width:78px;
+    flex:none;
+    color:var(--sub);
+  }
+  .axis-field input[type=number]{
+    width:72px;
+  }
+  .axis-field.auto-off input[type=number]{background:#fff;}
+  .axis-field input[type=number]:disabled{
+    background:#eeece6;
+    color:#aaa8a0;
+  }
+  .axis-field .auto-check{
+    display:flex;align-items:center;gap:4px;
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:var(--sub);
   }
 
   .checkbox-row{display:flex;flex-wrap:wrap;gap:14px;}
@@ -297,16 +357,17 @@
   <header class="page">
     <div class="eyebrow">AMR Surveillance / Time-series Viewer</div>
     <h1>緑膿菌（<i>Pseudomonas aeruginosa</i>）耐性率の時系列グラフ</h1>
-    <p>CSVを手動で読み込み、全体に占める割合およびPA内での耐性割合を折れ線グラフで表示します。表示範囲・系列はグラフごとに調整可能で、SVG／PNGとしてエクスポートできます。</p>
+    <p>同じフォルダの DTRP.csv を起動時に自動で読み込みます。別のCSVに差し替えたい場合は手動で選択してください。全体に占める割合およびPA内での耐性割合を折れ線グラフで表示し、SVG／PNGとしてエクスポートできます。</p>
   </header>
 
   <section class="panel">
     <h2 class="panel-title"><span class="num">1</span>データ読み込み</h2>
     <div class="ctrl-row">
       <div class="ctrl-group">
-        <label class="title" for="csvFile">CSVファイルを選択</label>
+        <label class="title" for="csvFile">CSVファイルを選択（差し替え用）</label>
         <input type="file" id="csvFile" accept=".csv,text/csv">
-        <div id="fileStatus" class="file-status">未読み込み：分離菌数（分母）と PA / CRPA / MDRP の菌株数（分子）を含むCSVを選択してください。</div>
+        <div id="fileStatus" class="file-status">DTRP.csv を自動読み込み中…</div>
+        <a id="csvDownloadLink" class="dl-link" href="DTRP.csv" download="DTRP.csv">↓ DTRP.csv をダウンロード</a>
       </div>
       <div class="ctrl-group">
         <label class="title">想定するCSV形式</label>
@@ -330,10 +391,10 @@
         </div>
       </div>
       <div class="ctrl-group">
-        <label class="title">Y軸スケール</label>
+        <label class="title">配色モード</label>
         <div class="toggle-btns">
-          <button class="pill active" id="yAxisAuto" type="button">自動</button>
-          <button class="pill" id="yAxisFixed" type="button">0〜100%固定</button>
+          <button class="pill active" id="modeColor" type="button">カラー</button>
+          <button class="pill" id="modeGray" type="button">グレースケール</button>
         </div>
       </div>
       <div class="ctrl-group">
@@ -356,6 +417,7 @@
         <button class="small" data-export="png" data-target="chart1">PNGで保存</button>
       </div>
     </div>
+    <div class="axis-panel" id="chart1Axis"></div>
     <table class="style-table" id="chart1Styles"></table>
     <div class="chart-box"><svg class="chart" id="chart1" viewBox="0 0 900 420"></svg></div>
     <details class="table-toggle"><summary>数値データを表示</summary>
@@ -374,6 +436,7 @@
         <button class="small" data-export="png" data-target="chart2">PNGで保存</button>
       </div>
     </div>
+    <div class="axis-panel" id="chart2Axis"></div>
     <table class="style-table" id="chart2Styles"></table>
     <div class="chart-box"><svg class="chart" id="chart2" viewBox="0 0 900 420"></svg></div>
     <details class="table-toggle"><summary>数値データを表示</summary>
@@ -398,12 +461,21 @@
   "use strict";
 
   // ---------- state ----------
+  const DEFAULT_AXIS = () => ({
+    yScale: "linear", // 'linear' | 'log'
+    yAutoRange: true, yMin: 0, yMax: 100,
+    yTickAuto: true, yTickCount: 5,
+    yLabelAuto: true, yLabelSize: 11,
+    xLabelAuto: true, xLabelSize: 11,
+    xIntervalAuto: true, xInterval: 1
+  });
+
   let state = {
     years: [],      // string[]
     rows: {},        // {all:[], PA:[], CRPA:[], MDRP:[]}
     fromIdx: 0,
     toIdx: 0,
-    yMode: "auto",   // 'auto' | 'fixed'
+    colorMode: "color",   // 'color' | 'grayscale'
     showLabels: false,
     // per-series style: show / color / dash(true=点線) / width(px) / pointR(px, 0=非表示)
     styles: {
@@ -416,6 +488,11 @@
         CRPA: {show:true, color:"#7a4a8a", dash:false, width:2.2, pointR:3.4},
         MDRP: {show:true, color:"#3f7d4a", dash:false, width:2.2, pointR:3.4}
       }
+    },
+    // per-chart axis settings (Y軸最小/最大、Y軸目盛り数、Y/X軸ラベル文字サイズ、X軸表示間隔)
+    axis: {
+      chart1: DEFAULT_AXIS(),
+      chart2: DEFAULT_AXIS()
     }
   };
 
@@ -430,6 +507,17 @@
     CRPA: {label:"CRPA / PA"},
     MDRP: {label:"MDRP / PA"}
   };
+
+  function toGrayscale(hex){
+    hex = hex.replace("#", "");
+    if(hex.length === 3) hex = hex.split("").map(c => c+c).join("");
+    const r = parseInt(hex.substr(0,2),16);
+    const g = parseInt(hex.substr(2,2),16);
+    const b = parseInt(hex.substr(4,2),16);
+    const gray = Math.round(0.299*r + 0.587*g + 0.114*b);
+    const h = gray.toString(16).padStart(2,"0");
+    return "#" + h + h + h;
+  }
 
   // ---------- CSV parsing ----------
   function parseCSV(text){
@@ -482,6 +570,36 @@
   // ---------- file handling ----------
   const fileInput = document.getElementById("csvFile");
   const fileStatus = document.getElementById("fileStatus");
+  const AUTO_LOAD_FILENAME = "DTRP.csv";
+
+  // CSVテキストを解析してグラフに反映する共通処理（自動読み込み・手動選択どちらからも使用）
+  function applyCSVText(text, sourceLabel){
+    const parsed = parseCSV(text);
+    const mapped = {};
+    for(const req of REQUIRED_KEYS){
+      const k = findKey(parsed.rows, req);
+      if(!k) throw new Error(`必須の行「${req}」が見つかりません。`);
+      mapped[req] = parsed.rows[k];
+    }
+    const len = parsed.years.length;
+    for(const req of REQUIRED_KEYS){
+      if(mapped[req].length !== len) throw new Error(`行「${req}」の値の数が年の数と一致しません。`);
+    }
+    state.years = parsed.years;
+    state.rows = mapped;
+    state.fromIdx = 0;
+    state.toIdx = len - 1;
+
+    fileStatus.textContent = `読み込み成功：${sourceLabel}（${parsed.years[0]}〜${parsed.years[len-1]}、${len}年分）`;
+    fileStatus.className = "file-status ok";
+
+    initControls();
+    document.getElementById("controlsPanel").style.display = "";
+    document.getElementById("chart1Panel").style.display = "";
+    document.getElementById("chart2Panel").style.display = "";
+    document.getElementById("emptyPanel").style.display = "none";
+    renderAll();
+  }
 
   fileInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
@@ -489,31 +607,7 @@
     const reader = new FileReader();
     reader.onload = (ev) => {
       try{
-        const parsed = parseCSV(ev.target.result);
-        const mapped = {};
-        for(const req of REQUIRED_KEYS){
-          const k = findKey(parsed.rows, req);
-          if(!k) throw new Error(`必須の行「${req}」が見つかりません。`);
-          mapped[req] = parsed.rows[k];
-        }
-        const len = parsed.years.length;
-        for(const req of REQUIRED_KEYS){
-          if(mapped[req].length !== len) throw new Error(`行「${req}」の値の数が年の数と一致しません。`);
-        }
-        state.years = parsed.years;
-        state.rows = mapped;
-        state.fromIdx = 0;
-        state.toIdx = len - 1;
-
-        fileStatus.textContent = `読み込み成功：${file.name}（${parsed.years[0]}〜${parsed.years[len-1]}、${len}年分）`;
-        fileStatus.className = "file-status ok";
-
-        initControls();
-        document.getElementById("controlsPanel").style.display = "";
-        document.getElementById("chart1Panel").style.display = "";
-        document.getElementById("chart2Panel").style.display = "";
-        document.getElementById("emptyPanel").style.display = "none";
-        renderAll();
+        applyCSVText(ev.target.result, file.name);
       }catch(err){
         fileStatus.textContent = "読み込みエラー：" + err.message;
         fileStatus.className = "file-status err";
@@ -525,6 +619,28 @@
     };
     reader.readAsText(file, "UTF-8");
   });
+
+  // 起動時に同じディレクトリの DTRP.csv を自動で読み込む
+  function autoLoadDefaultCSV(){
+    fetch(AUTO_LOAD_FILENAME)
+      .then(res => {
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        return res.text();
+      })
+      .then(text => {
+        try{
+          applyCSVText(text, AUTO_LOAD_FILENAME + "（自動読み込み）");
+        }catch(err){
+          fileStatus.textContent = `${AUTO_LOAD_FILENAME} の自動読み込みに失敗：` + err.message + "　CSVファイルを手動で選択してください。";
+          fileStatus.className = "file-status err";
+        }
+      })
+      .catch(() => {
+        fileStatus.textContent = `${AUTO_LOAD_FILENAME} の自動読み込みができませんでした（同じフォルダに配置されているか、ローカルサーバー経由で開いているかご確認ください）。CSVファイルを手動で選択してください。`;
+        fileStatus.className = "file-status err";
+      });
+  }
+  autoLoadDefaultCSV();
 
   // ---------- controls ----------
   function initControls(){
@@ -554,11 +670,11 @@
       renderAll();
     };
 
-    // y axis mode
-    const btnAuto = document.getElementById("yAxisAuto");
-    const btnFixed = document.getElementById("yAxisFixed");
-    btnAuto.onclick = () => { state.yMode = "auto"; btnAuto.classList.add("active"); btnFixed.classList.remove("active"); renderAll(); };
-    btnFixed.onclick = () => { state.yMode = "fixed"; btnFixed.classList.add("active"); btnAuto.classList.remove("active"); renderAll(); };
+    // color mode (color / grayscale)
+    const btnColor = document.getElementById("modeColor");
+    const btnGray = document.getElementById("modeGray");
+    btnColor.onclick = () => { state.colorMode = "color"; btnColor.classList.add("active"); btnGray.classList.remove("active"); renderAll(); };
+    btnGray.onclick = () => { state.colorMode = "grayscale"; btnGray.classList.add("active"); btnColor.classList.remove("active"); renderAll(); };
 
     // labels toggle
     const btnLabels = document.getElementById("labelsToggle");
@@ -572,6 +688,9 @@
     // series style table chart1 / chart2
     buildStyleTable("chart1Styles", SERIES_DEF, state.styles.chart1, renderChart1AndTable);
     buildStyleTable("chart2Styles", SERIES_DEF2, state.styles.chart2, renderChart2AndTable);
+
+    buildAxisControls("chart1Axis", state.axis.chart1, renderChart1AndTable);
+    buildAxisControls("chart2Axis", state.axis.chart2, renderChart2AndTable);
 
     // export buttons
     document.querySelectorAll("button[data-export]").forEach(btn => {
@@ -671,6 +790,149 @@
     table.appendChild(tbody);
   }
 
+  // builds Y軸 / X軸 の範囲・目盛り数・文字サイズ・間隔設定(各項目に自動チェックあり)
+  function buildAxisControls(containerId, axisState, onChange){
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+
+    function numberField(labelText, getVal, setVal, autoGetVal, autoSetVal, opts){
+      opts = opts || {};
+      const wrap = document.createElement("div");
+      wrap.className = "axis-field";
+      const label = document.createElement("label");
+      label.className = "f-label";
+      label.textContent = labelText;
+      const input = document.createElement("input");
+      input.type = "number";
+      if(opts.step != null) input.step = opts.step;
+      if(opts.min != null) input.min = opts.min;
+      if(opts.max != null) input.max = opts.max;
+      input.value = getVal();
+      input.disabled = autoGetVal();
+      input.oninput = () => {
+        const v = parseFloat(input.value);
+        if(!isNaN(v)){ setVal(v); onChange(); }
+      };
+      const autoWrap = document.createElement("label");
+      autoWrap.className = "auto-check";
+      const autoCb = document.createElement("input");
+      autoCb.type = "checkbox";
+      autoCb.checked = autoGetVal();
+      autoCb.onchange = () => {
+        autoSetVal(autoCb.checked);
+        input.disabled = autoCb.checked;
+        onChange();
+      };
+      autoWrap.appendChild(autoCb);
+      autoWrap.appendChild(document.createTextNode("自動"));
+
+      wrap.appendChild(label);
+      wrap.appendChild(input);
+      wrap.appendChild(autoWrap);
+      return wrap;
+    }
+
+    // Y軸 column
+    const yCol = document.createElement("div");
+    yCol.className = "axis-col";
+    const yTitle = document.createElement("div");
+    yTitle.className = "axis-col-title";
+    yTitle.textContent = "Y軸（縦軸）";
+    yCol.appendChild(yTitle);
+
+    // スケール（線形／対数）
+    const scaleWrap = document.createElement("div");
+    scaleWrap.className = "axis-field";
+    const scaleLabel = document.createElement("label");
+    scaleLabel.className = "f-label";
+    scaleLabel.textContent = "スケール";
+    const scaleBtns = document.createElement("div");
+    scaleBtns.className = "toggle-btns";
+    const btnLinear = document.createElement("button");
+    btnLinear.type = "button"; btnLinear.className = "pill" + (axisState.yScale === "linear" ? " active" : "");
+    btnLinear.textContent = "線形";
+    const btnLog = document.createElement("button");
+    btnLog.type = "button"; btnLog.className = "pill" + (axisState.yScale === "log" ? " active" : "");
+    btnLog.textContent = "対数";
+    btnLinear.onclick = () => { axisState.yScale = "linear"; btnLinear.classList.add("active"); btnLog.classList.remove("active"); onChange(); };
+    btnLog.onclick = () => { axisState.yScale = "log"; btnLog.classList.add("active"); btnLinear.classList.remove("active"); onChange(); };
+    scaleBtns.appendChild(btnLinear);
+    scaleBtns.appendChild(btnLog);
+    scaleWrap.appendChild(scaleLabel);
+    scaleWrap.appendChild(scaleBtns);
+    yCol.appendChild(scaleWrap);
+
+    // 最小値・最大値は「自動範囲」チェック1つで連動して有効/無効を切り替える
+    const yRangeAutoWrap = document.createElement("div");
+    yRangeAutoWrap.className = "axis-field";
+    const yRangeLabel = document.createElement("label");
+    yRangeLabel.className = "f-label";
+    yRangeLabel.textContent = "範囲";
+    const yRangeAutoCb = document.createElement("label");
+    yRangeAutoCb.className = "auto-check";
+    const yAutoCheckbox = document.createElement("input");
+    yAutoCheckbox.type = "checkbox";
+    yAutoCheckbox.checked = axisState.yAutoRange;
+    yRangeAutoCb.appendChild(yAutoCheckbox);
+    yRangeAutoCb.appendChild(document.createTextNode("自動調整"));
+    yRangeAutoWrap.appendChild(yRangeLabel);
+    yRangeAutoWrap.appendChild(yRangeAutoCb);
+    yCol.appendChild(yRangeAutoWrap);
+
+    const yMinField = numberField("最小値(%)",
+      () => axisState.yMin, v => axisState.yMin = v,
+      () => axisState.yAutoRange, () => {}, {step:1}
+    );
+    const yMaxField = numberField("最大値(%)",
+      () => axisState.yMax, v => axisState.yMax = v,
+      () => axisState.yAutoRange, () => {}, {step:1}
+    );
+    // hide the (redundant) per-field auto checkboxes; controlled by the shared one above
+    yMinField.querySelector(".auto-check").style.display = "none";
+    yMaxField.querySelector(".auto-check").style.display = "none";
+    yAutoCheckbox.onchange = () => {
+      axisState.yAutoRange = yAutoCheckbox.checked;
+      yMinField.querySelector("input[type=number]").disabled = yAutoCheckbox.checked;
+      yMaxField.querySelector("input[type=number]").disabled = yAutoCheckbox.checked;
+      onChange();
+    };
+    yCol.appendChild(yMinField);
+    yCol.appendChild(yMaxField);
+
+    yCol.appendChild(numberField("目盛りの数",
+      () => axisState.yTickCount, v => axisState.yTickCount = Math.max(1, Math.round(v)),
+      () => axisState.yTickAuto, v => axisState.yTickAuto = v,
+      {step:1, min:1, max:20}
+    ));
+    yCol.appendChild(numberField("文字サイズ(px)",
+      () => axisState.yLabelSize, v => axisState.yLabelSize = v,
+      () => axisState.yLabelAuto, v => axisState.yLabelAuto = v,
+      {step:1, min:6, max:32}
+    ));
+
+    // X軸 column
+    const xCol = document.createElement("div");
+    xCol.className = "axis-col";
+    const xTitle = document.createElement("div");
+    xTitle.className = "axis-col-title";
+    xTitle.textContent = "X軸（横軸・年）";
+    xCol.appendChild(xTitle);
+
+    xCol.appendChild(numberField("文字サイズ(px)",
+      () => axisState.xLabelSize, v => axisState.xLabelSize = v,
+      () => axisState.xLabelAuto, v => axisState.xLabelAuto = v,
+      {step:1, min:6, max:32}
+    ));
+    xCol.appendChild(numberField("表示間隔(年)",
+      () => axisState.xInterval, v => axisState.xInterval = Math.max(1, Math.round(v)),
+      () => axisState.xIntervalAuto, v => axisState.xIntervalAuto = v,
+      {step:1, min:1, max:20}
+    ));
+
+    container.appendChild(yCol);
+    container.appendChild(xCol);
+  }
+
   function renderAll(){
     renderChart1AndTable();
     renderChart2AndTable();
@@ -708,10 +970,11 @@
       .filter(k => state.styles.chart1[k].show)
       .map(k => {
         const s = state.styles.chart1[k];
-        return {key:k, label:SERIES_DEF[k].label, hex:s.color, dash:s.dash, width:s.width, pointR:s.pointR, values:ratios[k]};
+        const hex = state.colorMode === "grayscale" ? toGrayscale(s.color) : s.color;
+        return {key:k, label:SERIES_DEF[k].label, hex:hex, dash:s.dash, width:s.width, pointR:s.pointR, values:ratios[k]};
       });
 
-    drawLineChart("chart1", years, seriesList);
+    drawLineChart("chart1", years, seriesList, state.axis.chart1);
     buildTable("table1", years, [
       {label:"PA / all (%)", values:ratios.PA},
       {label:"CRPA / all (%)", values:ratios.CRPA},
@@ -730,10 +993,11 @@
       .filter(k => state.styles.chart2[k].show)
       .map(k => {
         const s = state.styles.chart2[k];
-        return {key:k, label:SERIES_DEF2[k].label, hex:s.color, dash:s.dash, width:s.width, pointR:s.pointR, values:ratios[k]};
+        const hex = state.colorMode === "grayscale" ? toGrayscale(s.color) : s.color;
+        return {key:k, label:SERIES_DEF2[k].label, hex:hex, dash:s.dash, width:s.width, pointR:s.pointR, values:ratios[k]};
       });
 
-    drawLineChart("chart2", years, seriesList);
+    drawLineChart("chart2", years, seriesList, state.axis.chart2);
     buildTable("table2", years, [
       {label:"CRPA / PA (%)", values:ratios.CRPA},
       {label:"MDRP / PA (%)", values:ratios.MDRP}
@@ -752,7 +1016,46 @@
     return n * mag;
   }
 
-  function drawLineChart(svgId, years, seriesList){
+  // 対数軸: 与えた正の値以下の「きりのよい」最小値(1/2/5 x 10^n)を返す
+  function niceMinLog(v){
+    if(v <= 0) return 0.01;
+    const mag = Math.pow(10, Math.floor(Math.log10(v)));
+    const norm = v / mag;
+    let n;
+    if(norm >= 5) n = 5;
+    else if(norm >= 2) n = 2;
+    else n = 1;
+    return n * mag;
+  }
+
+  // 対数軸の目盛り値を生成。自動時は 1-2-5 パターンの桁、手動時は指定本数で対数等間隔
+  function niceLogTicks(yMin, yMax, auto, tickCount){
+    if(auto){
+      const ticks = [];
+      const startExp = Math.floor(Math.log10(yMin));
+      const endExp = Math.ceil(Math.log10(yMax));
+      const mults = [1, 2, 5];
+      for(let e = startExp; e <= endExp; e++){
+        for(const m of mults){
+          const val = m * Math.pow(10, e);
+          if(val >= yMin * 0.999 && val <= yMax * 1.001) ticks.push(val);
+        }
+      }
+      if(ticks.length === 0){ ticks.push(yMin, yMax); }
+      return ticks.sort((a, b) => a - b);
+    } else {
+      const logMin = Math.log10(yMin), logMax = Math.log10(yMax);
+      const ticks = [];
+      const n = Math.max(1, tickCount);
+      for(let g = 0; g <= n; g++){
+        ticks.push(Math.pow(10, logMin + (logMax - logMin) * g / n));
+      }
+      return ticks;
+    }
+  }
+
+  function drawLineChart(svgId, years, seriesList, axisState){
+    axisState = axisState || DEFAULT_AXIS();
     const svg = document.getElementById(svgId);
     while(svg.firstChild) svg.removeChild(svg.firstChild);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -771,19 +1074,52 @@
       return;
     }
 
-    // y domain
-    let yMax;
-    if(state.yMode === "fixed"){
-      yMax = 100;
+    const isLog = axisState.yScale === "log";
+
+    // y domain: 自動 or 手動指定
+    let yMin, yMax;
+    if(isLog){
+      if(axisState.yAutoRange){
+        let maxV = 0, minPos = Infinity;
+        seriesList.forEach(s => s.values.forEach(v => {
+          if(v != null && v > 0){
+            if(v > maxV) maxV = v;
+            if(v < minPos) minPos = v;
+          }
+        }));
+        if(!isFinite(minPos) || maxV <= 0){ yMin = 0.1; yMax = 1; }
+        else{
+          yMin = niceMinLog(minPos);
+          yMax = niceMax(maxV * 1.15);
+          if(yMax <= yMin) yMax = yMin * 10;
+        }
+      } else {
+        yMin = axisState.yMin > 0 ? axisState.yMin : 0.01; // 対数軸は0以下不可
+        yMax = axisState.yMax > yMin ? axisState.yMax : yMin * 10;
+      }
     } else {
-      let maxV = 0;
-      seriesList.forEach(s => s.values.forEach(v => { if(v != null && v > maxV) maxV = v; }));
-      yMax = niceMax(maxV * 1.15);
+      if(axisState.yAutoRange){
+        let maxV = 0;
+        seriesList.forEach(s => s.values.forEach(v => { if(v != null && v > maxV) maxV = v; }));
+        yMin = 0;
+        yMax = niceMax(maxV * 1.15);
+      } else {
+        yMin = axisState.yMin;
+        yMax = axisState.yMax;
+        if(yMax <= yMin) yMax = yMin + 1; // 不正値のガード
+      }
     }
-    const yMin = 0;
+
+    const yLabelSize = axisState.yLabelAuto ? 11 : axisState.yLabelSize;
+    const xLabelSize = axisState.xLabelAuto ? 11 : axisState.xLabelSize;
+    const gridCount = axisState.yTickAuto ? 5 : axisState.yTickCount;
 
     const xForIdx = (i) => PAD.left + (years.length === 1 ? plotW/2 : (plotW * i / (years.length - 1)));
-    const yForVal = (v) => PAD.top + plotH - (plotH * (v - yMin) / (yMax - yMin));
+    const logMin = isLog ? Math.log10(yMin) : null;
+    const logMax = isLog ? Math.log10(yMax) : null;
+    const yForVal = isLog
+      ? (v) => PAD.top + plotH - (plotH * (Math.log10(v) - logMin) / (logMax - logMin))
+      : (v) => PAD.top + plotH - (plotH * (v - yMin) / (yMax - yMin));
 
     const svgNS = "http://www.w3.org/2000/svg";
     function el(tag, attrs){
@@ -792,27 +1128,56 @@
       return e;
     }
 
-    // gridlines (y)
-    const gridCount = 5;
-    for(let g = 0; g <= gridCount; g++){
-      const val = yMin + (yMax - yMin) * g / gridCount;
-      const y = yForVal(val);
-      svg.appendChild(el("line", {
-        x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
-        class: g === 0 ? "zero-line" : "grid-line"
-      }));
-      const lbl = el("text", {x:PAD.left-8, y:y+4, "text-anchor":"end", class:"axis-label"});
-      lbl.textContent = (Math.round(val*10)/10) + "%";
-      svg.appendChild(lbl);
+    function formatAxisVal(v){
+      if(v >= 100) return Math.round(v);
+      if(v >= 1) return Math.round(v * 10) / 10;
+      if(v >= 0.01) return Math.round(v * 100) / 100;
+      return v;
     }
 
-    // x axis labels (thin out if many years)
+    // gridlines (y)
+    const yTickVals = isLog ? niceLogTicks(yMin, yMax, axisState.yTickAuto, gridCount) : null;
+    if(isLog){
+      yTickVals.forEach(val => {
+        const y = yForVal(val);
+        svg.appendChild(el("line", {
+          x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
+          class: Math.abs(val - 1) < 1e-9 ? "zero-line" : "grid-line"
+        }));
+        const lbl = el("text", {
+          x:PAD.left-8, y:y+4, "text-anchor":"end", class:"axis-label",
+          style:`font-size:${yLabelSize}px`
+        });
+        lbl.textContent = formatAxisVal(val) + "%";
+        svg.appendChild(lbl);
+      });
+    } else {
+      for(let g = 0; g <= gridCount; g++){
+        const val = yMin + (yMax - yMin) * g / gridCount;
+        const y = yForVal(val);
+        svg.appendChild(el("line", {
+          x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
+          class: Math.abs(val) < 1e-9 ? "zero-line" : "grid-line"
+        }));
+        const lbl = el("text", {
+          x:PAD.left-8, y:y+4, "text-anchor":"end", class:"axis-label",
+          style:`font-size:${yLabelSize}px`
+        });
+        lbl.textContent = formatAxisVal(val) + "%";
+        svg.appendChild(lbl);
+      }
+    }
+
+    // x axis labels (自動なら間引き、手動ならN年ごと)
     const maxLabels = 14;
-    const step = Math.max(1, Math.ceil(years.length / maxLabels));
+    const step = axisState.xIntervalAuto ? Math.max(1, Math.ceil(years.length / maxLabels)) : axisState.xInterval;
     years.forEach((y, i) => {
       if(i % step !== 0 && i !== years.length - 1) return;
       const x = xForIdx(i);
-      const lbl = el("text", {x:x, y:H-PAD.bottom+18, "text-anchor":"middle", class:"axis-label"});
+      const lbl = el("text", {
+        x:x, y:H-PAD.bottom+18, "text-anchor":"middle", class:"axis-label",
+        style:`font-size:${xLabelSize}px`
+      });
       lbl.textContent = y;
       svg.appendChild(lbl);
       svg.appendChild(el("line", {x1:x, x2:x, y1:H-PAD.bottom, y2:H-PAD.bottom+4, stroke:"#c9c6bc"}));
@@ -826,7 +1191,7 @@
       const pointR = s.pointR != null ? s.pointR : 3.4;
       let d = "";
       s.values.forEach((v, i) => {
-        if(v == null) return;
+        if(v == null || (isLog && v <= 0)) return;
         const x = xForIdx(i), y = yForVal(v);
         d += (d === "" ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1) + " ";
       });
@@ -844,7 +1209,7 @@
       }
       if(pointR > 0){
         s.values.forEach((v, i) => {
-          if(v == null) return;
+          if(v == null || (isLog && v <= 0)) return;
           const x = xForIdx(i), y = yForVal(v);
           const c = el("circle", {cx:x, cy:y, r:pointR, class:"series-point", fill:s.hex});
           const title = el("title", {});
@@ -860,7 +1225,7 @@
       } else if(state.showLabels){
         // still show labels even if points are hidden
         s.values.forEach((v, i) => {
-          if(v == null) return;
+          if(v == null || (isLog && v <= 0)) return;
           const x = xForIdx(i), y = yForVal(v);
           const t = el("text", {x:x, y:y-9, "text-anchor":"middle", class:"value-label"});
           t.textContent = v.toFixed(1);
