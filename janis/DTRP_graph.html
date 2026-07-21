@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>緑膿菌 耐性率サーベイランス｜時系列グラフ</title>
+<title id="pageTitle">耐性菌サーベイランス｜時系列グラフ</title>
 <style>
   :root{
     --bg:#f6f5f1;
@@ -356,24 +356,32 @@
 
   <header class="page">
     <div class="eyebrow">AMR Surveillance / Time-series Viewer</div>
-    <h1>緑膿菌（<i>Pseudomonas aeruginosa</i>）耐性率の時系列グラフ</h1>
-    <p>同じフォルダの DTRP.csv を起動時に自動で読み込みます。別のCSVに差し替えたい場合は手動で選択してください。全体に占める割合およびPA内での耐性割合を折れ線グラフで表示し、SVG／PNGとしてエクスポートできます。</p>
+    <h1 id="mainTitle">耐性菌サーベイランス　耐性率の時系列グラフ</h1>
+    <p id="mainDesc">同じフォルダの DTRP.csv（緑膿菌）または MDRA.csv（アシネトバクター属）などを読み込みます。下のボタンで既定のCSVを選ぶか、別のCSVファイルを手動で選択してください。全体に占める割合および菌種内での耐性割合を折れ線グラフで表示し、SVG／PNGとしてエクスポートできます。</p>
   </header>
 
   <section class="panel">
     <h2 class="panel-title"><span class="num">1</span>データ読み込み</h2>
     <div class="ctrl-row">
       <div class="ctrl-group">
-        <label class="title" for="csvFile">CSVファイルを選択（差し替え用）</label>
+        <label class="title">既定のCSVを読み込む</label>
+        <div class="toggle-btns">
+          <button class="pill" id="loadDTRP" type="button">DTRP.csv（緑膿菌）</button>
+          <button class="pill" id="loadMDRA" type="button">MDRA.csv（アシネトバクター属）</button>
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <label class="title" for="csvFile">別のCSVファイルを選択</label>
         <input type="file" id="csvFile" accept=".csv,text/csv">
-        <div id="fileStatus" class="file-status">DTRP.csv を自動読み込み中…</div>
-        <a id="csvDownloadLink" class="dl-link" href="DTRP.csv" download="DTRP.csv">↓ DTRP.csv をダウンロード</a>
+        <div id="fileStatus" class="file-status">既定のCSVを自動読み込み中…</div>
+        <a id="csvDownloadLink" class="dl-link" href="DTRP.csv" download="DTRP.csv" style="display:none;">↓ 読み込んだCSVをダウンロード</a>
       </div>
       <div class="ctrl-group">
         <label class="title">想定するCSV形式</label>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--sub);max-width:420px;">
-          1列目=項目名（all, PA, CRPA, MDRP）／2列目以降=年（列見出し）の値<br>
-          例）,2007,2008,...<br>&nbsp;&nbsp;&nbsp;all,364818,930861,...<br>&nbsp;&nbsp;&nbsp;PA,31348,75664,...
+        <div id="csvFormatHint" style="font-family:var(--mono);font-size:11px;color:var(--sub);max-width:420px;">
+          1行目（見出し）=年／1列目=項目名。項目の並びは「1行目=all（全分離株数）、2行目=菌種の総数、3行目以降=各耐性区分の株数」。<br>
+          例1）,2007,2008,...<br>&nbsp;&nbsp;&nbsp;all,364818,930861,...<br>&nbsp;&nbsp;&nbsp;PA,31348,75664,...<br>&nbsp;&nbsp;&nbsp;CRPA,5542,13524,...<br>&nbsp;&nbsp;&nbsp;MDRP,868,2109,...<br>
+          例2）,2007,2008,...<br>&nbsp;&nbsp;&nbsp;all,364818,930861,...<br>&nbsp;&nbsp;&nbsp;Acinetobacter,6695,14755,...<br>&nbsp;&nbsp;&nbsp;MDRA,18,35,...
         </div>
       </div>
     </div>
@@ -409,8 +417,8 @@
   <section class="panel" id="chart1Panel" style="display:none;">
     <div class="chart-head">
       <div>
-        <h3>① 全分離株に占める割合（all を分母）</h3>
-        <div class="desc">PA / all、CRPA / all、MDRP / all（％）</div>
+        <h3 id="chart1Title">① 全分離株に占める割合（all を分母）</h3>
+        <div class="desc" id="chart1Desc">菌種 / all、各耐性区分 / all（％）</div>
       </div>
       <div class="export-btns">
         <button class="small" data-export="svg" data-target="chart1">SVGで保存</button>
@@ -428,8 +436,8 @@
   <section class="panel" id="chart2Panel" style="display:none;">
     <div class="chart-head">
       <div>
-        <h3>② PA分離株に占める割合（PA を分母）</h3>
-        <div class="desc">CRPA / PA、MDRP / PA（％）</div>
+        <h3 id="chart2Title">② 菌種分離株に占める割合（菌種 を分母）</h3>
+        <div class="desc" id="chart2Desc">各耐性区分 / 菌種（％）</div>
       </div>
       <div class="export-btns">
         <button class="small" data-export="svg" data-target="chart2">SVGで保存</button>
@@ -471,24 +479,17 @@
   });
 
   let state = {
-    years: [],      // string[]
-    rows: {},        // {all:[], PA:[], CRPA:[], MDRP:[]}
+    years: [],       // string[]
+    rows: {},        // {all:[], <organism>:[], <subtype1>:[], ...}
+    organismKey: null,   // 例）"PA" / "Acinetobacter"
+    subtypeKeys: [],     // 例）["CRPA","MDRP"] / ["MDRA"]
     fromIdx: 0,
     toIdx: 0,
     colorMode: "color",   // 'color' | 'grayscale'
     showLabels: false,
     // per-series style: show / color / dash(true=点線) / width(px) / pointR(px, 0=非表示)
-    styles: {
-      chart1: {
-        PA:   {show:true, color:"#2e5f6e", dash:false, width:2.2, pointR:3.4},
-        CRPA: {show:true, color:"#b23a2f", dash:false, width:2.2, pointR:3.4},
-        MDRP: {show:true, color:"#c9862a", dash:false, width:2.2, pointR:3.4}
-      },
-      chart2: {
-        CRPA: {show:true, color:"#7a4a8a", dash:false, width:2.2, pointR:3.4},
-        MDRP: {show:true, color:"#3f7d4a", dash:false, width:2.2, pointR:3.4}
-      }
-    },
+    // 実際の中身はCSV読み込み後に buildDefaultStyles() で動的に構築する
+    styles: { chart1: {}, chart2: {} },
     // per-chart axis settings (Y軸最小/最大、Y軸目盛り数、Y/X軸ラベル文字サイズ、X軸表示間隔)
     axis: {
       chart1: DEFAULT_AXIS(),
@@ -496,17 +497,42 @@
     }
   };
 
-  const REQUIRED_KEYS = ["all","PA","CRPA","MDRP"];
+  // CSVの1行目（all以外の先頭行）=菌種の総数、それ以降=耐性区分の行、として動的に構築する
+  let SERIES_DEF = {};
+  let SERIES_DEF2 = {};
 
-  const SERIES_DEF = {
-    PA:   {label:"PA / all"},
-    CRPA: {label:"CRPA / all"},
-    MDRP: {label:"MDRP / all"}
+  function buildSeriesDefs(){
+    SERIES_DEF = {};
+    SERIES_DEF[state.organismKey] = {label: `${state.organismKey} / all`};
+    state.subtypeKeys.forEach(k => { SERIES_DEF[k] = {label: `${k} / all`}; });
+    SERIES_DEF2 = {};
+    state.subtypeKeys.forEach(k => { SERIES_DEF2[k] = {label: `${k} / ${state.organismKey}`}; });
+  }
+
+  const CHART1_COLORS = ["#2e5f6e","#b23a2f","#c9862a","#4472c4","#8a8680","#a1522e","#3f7d4a"];
+  const CHART2_COLORS = ["#7a4a8a","#3f7d4a","#c9862a","#2e5f6e","#b23a2f","#4472c4"];
+
+  function buildDefaultStyles(){
+    const chart1 = {};
+    [state.organismKey, ...state.subtypeKeys].forEach((k, i) => {
+      chart1[k] = {show:true, color:CHART1_COLORS[i % CHART1_COLORS.length], dash:false, width:2.2, pointR:3.4};
+    });
+    const chart2 = {};
+    state.subtypeKeys.forEach((k, i) => {
+      chart2[k] = {show:true, color:CHART2_COLORS[i % CHART2_COLORS.length], dash:false, width:2.2, pointR:3.4};
+    });
+    state.styles = {chart1, chart2};
+  }
+
+  // 既知の菌種キーに対する表示用ラベル（学名はイタリック表記）
+  const ORGANISM_INFO = {
+    PA: {titleHtml: "緑膿菌（<i>Pseudomonas aeruginosa</i>）", plain: "PA"},
+    Acinetobacter: {titleHtml: "アシネトバクター属（<i>Acinetobacter</i> spp.）", plain: "Acinetobacter"}
   };
-  const SERIES_DEF2 = {
-    CRPA: {label:"CRPA / PA"},
-    MDRP: {label:"MDRP / PA"}
-  };
+  function organismTitleHtml(key){
+    const info = ORGANISM_INFO[key];
+    return info ? info.titleHtml : `${key}`;
+  }
 
   function toGrayscale(hex){
     hex = hex.replace("#", "");
@@ -570,28 +596,67 @@
   // ---------- file handling ----------
   const fileInput = document.getElementById("csvFile");
   const fileStatus = document.getElementById("fileStatus");
-  const AUTO_LOAD_FILENAME = "DTRP.csv";
+  const dlLink = document.getElementById("csvDownloadLink");
+  const AUTO_CANDIDATES = ["DTRP.csv", "MDRA.csv"]; // 起動時に順に自動読み込みを試すファイル名
+
+  // ヘッダー・チャート見出しなど、読み込んだデータセットに応じて変わるテキストを更新
+  function updateHeaderTexts(){
+    const organism = state.organismKey;
+    document.getElementById("mainTitle").innerHTML = organismTitleHtml(organism) + "耐性率の時系列グラフ";
+    document.getElementById("pageTitle").textContent = `${(ORGANISM_INFO[organism] || {plain:organism}).plain} 耐性率サーベイランス｜時系列グラフ`;
+
+    const subtypeLabelsAll = [organism, ...state.subtypeKeys].map(k => `${k} / all`).join("、");
+    document.getElementById("chart1Desc").textContent = `${subtypeLabelsAll}（％）`;
+
+    document.getElementById("chart2Title").textContent = `② ${organism}分離株に占める割合（${organism} を分母）`;
+    const subtypeLabelsOrg = state.subtypeKeys.map(k => `${k} / ${organism}`).join("、");
+    document.getElementById("chart2Desc").textContent = `${subtypeLabelsOrg}（％）`;
+  }
 
   // CSVテキストを解析してグラフに反映する共通処理（自動読み込み・手動選択どちらからも使用）
-  function applyCSVText(text, sourceLabel){
+  // 行の並びを「1行目=all（全分離株数）、2行目=菌種の総数、3行目以降=各耐性区分の株数」として動的に解釈する
+  function applyCSVText(text, sourceLabel, downloadFilename){
     const parsed = parseCSV(text);
-    const mapped = {};
-    for(const req of REQUIRED_KEYS){
-      const k = findKey(parsed.rows, req);
-      if(!k) throw new Error(`必須の行「${req}」が見つかりません。`);
-      mapped[req] = parsed.rows[k];
+    const allKey = findKey(parsed.rows, "all");
+    if(!allKey) throw new Error('必須の行「all」が見つかりません。');
+    const otherKeys = Object.keys(parsed.rows).filter(k => k !== allKey);
+    if(otherKeys.length < 2){
+      throw new Error("「all」以外に、菌種の総数の行と耐性区分の行が少なくとも1行ずつ必要です。");
     }
+    const organismKey = otherKeys[0];
+    const subtypeKeys = otherKeys.slice(1);
+
     const len = parsed.years.length;
-    for(const req of REQUIRED_KEYS){
-      if(mapped[req].length !== len) throw new Error(`行「${req}」の値の数が年の数と一致しません。`);
+    const mapped = {};
+    mapped["all"] = parsed.rows[allKey];
+    mapped[organismKey] = parsed.rows[organismKey];
+    subtypeKeys.forEach(k => { mapped[k] = parsed.rows[k]; });
+    for(const k of Object.keys(mapped)){
+      if(mapped[k].length !== len) throw new Error(`行「${k}」の値の数が年の数と一致しません。`);
     }
+
     state.years = parsed.years;
     state.rows = mapped;
+    state.organismKey = organismKey;
+    state.subtypeKeys = subtypeKeys;
     state.fromIdx = 0;
     state.toIdx = len - 1;
 
-    fileStatus.textContent = `読み込み成功：${sourceLabel}（${parsed.years[0]}〜${parsed.years[len-1]}、${len}年分）`;
+    buildSeriesDefs();
+    buildDefaultStyles();
+    updateHeaderTexts();
+
+    fileStatus.textContent = `読み込み成功：${sourceLabel}（菌種=${organismKey}、耐性区分=${subtypeKeys.join("・")}、${parsed.years[0]}〜${parsed.years[len-1]}、${len}年分）`;
     fileStatus.className = "file-status ok";
+
+    if(downloadFilename){
+      dlLink.href = downloadFilename;
+      dlLink.download = downloadFilename;
+      dlLink.textContent = `↓ ${downloadFilename} をダウンロード`;
+      dlLink.style.display = "";
+    } else {
+      dlLink.style.display = "none";
+    }
 
     initControls();
     document.getElementById("controlsPanel").style.display = "";
@@ -607,7 +672,7 @@
     const reader = new FileReader();
     reader.onload = (ev) => {
       try{
-        applyCSVText(ev.target.result, file.name);
+        applyCSVText(ev.target.result, file.name, null);
       }catch(err){
         fileStatus.textContent = "読み込みエラー：" + err.message;
         fileStatus.className = "file-status err";
@@ -620,25 +685,45 @@
     reader.readAsText(file, "UTF-8");
   });
 
-  // 起動時に同じディレクトリの DTRP.csv を自動で読み込む
-  function autoLoadDefaultCSV(){
-    fetch(AUTO_LOAD_FILENAME)
+  // 指定したファイル名（同じフォルダ内のCSV）を読み込む共通処理。既定ボタン・自動読み込みの両方から使用
+  function loadByFilename(fname, isAuto, onFail){
+    fetch(fname)
       .then(res => {
         if(!res.ok) throw new Error("HTTP " + res.status);
         return res.text();
       })
       .then(text => {
         try{
-          applyCSVText(text, AUTO_LOAD_FILENAME + "（自動読み込み）");
+          applyCSVText(text, fname + (isAuto ? "（自動読み込み）" : ""), fname);
         }catch(err){
-          fileStatus.textContent = `${AUTO_LOAD_FILENAME} の自動読み込みに失敗：` + err.message + "　CSVファイルを手動で選択してください。";
-          fileStatus.className = "file-status err";
+          if(onFail) onFail(err);
+          else {
+            fileStatus.textContent = `${fname} の読み込みに失敗：` + err.message;
+            fileStatus.className = "file-status err";
+          }
         }
       })
-      .catch(() => {
-        fileStatus.textContent = `${AUTO_LOAD_FILENAME} の自動読み込みができませんでした（同じフォルダに配置されているか、ローカルサーバー経由で開いているかご確認ください）。CSVファイルを手動で選択してください。`;
-        fileStatus.className = "file-status err";
+      .catch((err) => {
+        if(onFail) onFail(err);
+        else {
+          fileStatus.textContent = `${fname} を読み込めませんでした（同じフォルダに配置されているか、ローカルサーバー経由で開いているかご確認ください）。CSVファイルを手動で選択してください。`;
+          fileStatus.className = "file-status err";
+        }
       });
+  }
+
+  document.getElementById("loadDTRP").addEventListener("click", () => loadByFilename("DTRP.csv", false));
+  document.getElementById("loadMDRA").addEventListener("click", () => loadByFilename("MDRA.csv", false));
+
+  // 起動時に既定のCSV（DTRP.csv → だめならMDRA.csv の順）を自動で読み込む
+  function autoLoadDefaultCSV(idx){
+    idx = idx || 0;
+    if(idx >= AUTO_CANDIDATES.length){
+      fileStatus.textContent = `既定のCSV（${AUTO_CANDIDATES.join(" / ")}）を自動読み込みできませんでした。上のボタンで再試行するか、CSVファイルを手動で選択してください。`;
+      fileStatus.className = "file-status err";
+      return;
+    }
+    loadByFilename(AUTO_CANDIDATES[idx], true, () => autoLoadDefaultCSV(idx + 1));
   }
   autoLoadDefaultCSV();
 
@@ -961,13 +1046,12 @@
   function renderChart1AndTable(){
     if(!state.years.length) return;
     const years = getRangeYears();
-    const ratios = {
-      PA:   computeRatio(sliceRange(state.rows.PA),   sliceRange(state.rows.all)),
-      CRPA: computeRatio(sliceRange(state.rows.CRPA), sliceRange(state.rows.all)),
-      MDRP: computeRatio(sliceRange(state.rows.MDRP), sliceRange(state.rows.all))
-    };
-    const seriesList = Object.keys(SERIES_DEF)
-      .filter(k => state.styles.chart1[k].show)
+    const keys1 = [state.organismKey, ...state.subtypeKeys];
+    const ratios = {};
+    keys1.forEach(k => { ratios[k] = computeRatio(sliceRange(state.rows[k]), sliceRange(state.rows.all)); });
+
+    const seriesList = keys1
+      .filter(k => state.styles.chart1[k] && state.styles.chart1[k].show)
       .map(k => {
         const s = state.styles.chart1[k];
         const hex = state.colorMode === "grayscale" ? toGrayscale(s.color) : s.color;
@@ -975,22 +1059,17 @@
       });
 
     drawLineChart("chart1", years, seriesList, state.axis.chart1);
-    buildTable("table1", years, [
-      {label:"PA / all (%)", values:ratios.PA},
-      {label:"CRPA / all (%)", values:ratios.CRPA},
-      {label:"MDRP / all (%)", values:ratios.MDRP}
-    ]);
+    buildTable("table1", years, keys1.map(k => ({label:`${k} / all (%)`, values:ratios[k]})));
   }
 
   function renderChart2AndTable(){
     if(!state.years.length) return;
     const years = getRangeYears();
-    const ratios = {
-      CRPA: computeRatio(sliceRange(state.rows.CRPA), sliceRange(state.rows.PA)),
-      MDRP: computeRatio(sliceRange(state.rows.MDRP), sliceRange(state.rows.PA))
-    };
-    const seriesList = Object.keys(SERIES_DEF2)
-      .filter(k => state.styles.chart2[k].show)
+    const ratios = {};
+    state.subtypeKeys.forEach(k => { ratios[k] = computeRatio(sliceRange(state.rows[k]), sliceRange(state.rows[state.organismKey])); });
+
+    const seriesList = state.subtypeKeys
+      .filter(k => state.styles.chart2[k] && state.styles.chart2[k].show)
       .map(k => {
         const s = state.styles.chart2[k];
         const hex = state.colorMode === "grayscale" ? toGrayscale(s.color) : s.color;
@@ -998,10 +1077,7 @@
       });
 
     drawLineChart("chart2", years, seriesList, state.axis.chart2);
-    buildTable("table2", years, [
-      {label:"CRPA / PA (%)", values:ratios.CRPA},
-      {label:"MDRP / PA (%)", values:ratios.MDRP}
-    ]);
+    buildTable("table2", years, state.subtypeKeys.map(k => ({label:`${k} / ${state.organismKey} (%)`, values:ratios[k]})));
   }
 
   function niceMax(v){
