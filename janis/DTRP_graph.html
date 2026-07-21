@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>緑膿菌 耐性率サーベイランス｜時系列グラフ</title>
+<style>
+  :root{
+    --bg:#f6f5f1;
+    --panel:#ffffff;
+    --ink:#1a1a1a;
+    --sub:#5c5c58;
+    --line:#d8d5cc;
+    --accent:#2e5f6e;
+    --accent-soft:#e7eef0;
+    --c-all:#8a8680;
+    --c-pa:#2e5f6e;
+    --c-crpa:#b23a2f;
+    --c-mdrp:#c9862a;
+    --c-crpa2:#7a4a8a;
+    --c-mdrp2:#3f7d4a;
+    --mono: "SFMono-Regular", Consolas, "Courier New", monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",-apple-system,BlinkMacSystemFont,sans-serif;
+    line-height:1.6;
+  }
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 20px 60px;}
+
+  header.page{
+    border-bottom:2px solid var(--ink);
+    padding-bottom:16px;
+    margin-bottom:24px;
+  }
+  header.page .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.12em;
+    color:var(--sub);
+    text-transform:uppercase;
+  }
+  header.page h1{
+    font-size:22px;
+    margin:4px 0 6px;
+    font-weight:700;
+  }
+  header.page p{
+    margin:0;
+    font-size:13px;
+    color:var(--sub);
+  }
+  header.page .sp-note{font-style:normal;}
+  header.page i, .sp-italic{font-style:italic;}
+
+  section.panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:20px 22px;
+    margin-bottom:22px;
+  }
+  h2.panel-title{
+    font-size:14px;
+    margin:0 0 14px;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  h2.panel-title .num{
+    font-family:var(--mono);
+    font-size:11px;
+    color:#fff;
+    background:var(--accent);
+    padding:2px 7px;
+    border-radius:3px;
+  }
+
+  /* --- controls --- */
+  .ctrl-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:20px;
+    align-items:flex-start;
+  }
+  .ctrl-group{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    font-size:12px;
+  }
+  .ctrl-group label.title{
+    font-weight:700;
+    color:var(--ink);
+    font-size:12px;
+  }
+  input[type=file]{
+    font-size:12px;
+    font-family:var(--mono);
+  }
+  .file-status{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--sub);
+  }
+  .file-status.ok{color:#2e6e3f;}
+  .file-status.err{color:#b23a2f;}
+
+  .range-inputs{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:var(--mono);
+  }
+  select, input[type=number]{
+    font-family:var(--mono);
+    font-size:12px;
+    padding:4px 6px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:#fff;
+    color:var(--ink);
+  }
+  .slider-wrap{width:280px;}
+  input[type=range]{width:100%;accent-color:var(--accent);}
+  .range-values{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--sub);
+    display:flex;
+    justify-content:space-between;
+  }
+
+  .checkbox-row{display:flex;flex-wrap:wrap;gap:14px;}
+  .checkbox-item{
+    display:flex;align-items:center;gap:6px;
+    font-size:12px;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:20px;
+    background:#fff;
+  }
+  .checkbox-item input{accent-color:var(--accent);}
+  .swatch{width:10px;height:10px;border-radius:50%;display:inline-block;}
+
+  /* --- per-series style table --- */
+  table.style-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+    margin-bottom:14px;
+  }
+  table.style-table th, table.style-table td{
+    border:1px solid var(--line);
+    padding:6px 8px;
+    vertical-align:middle;
+  }
+  table.style-table thead th{
+    background:#f0efe9;
+    font-family:var(--mono);
+    font-size:10.5px;
+    font-weight:700;
+    text-align:left;
+    letter-spacing:.02em;
+  }
+  table.style-table td.col-show{text-align:center;width:40px;}
+  table.style-table td.col-label{white-space:nowrap;font-weight:700;}
+  table.style-table td.col-color{width:52px;text-align:center;}
+  table.style-table input[type=color]{
+    width:34px;height:26px;
+    padding:0;border:1px solid var(--line);border-radius:4px;
+    background:none;cursor:pointer;
+  }
+  table.style-table select{width:100%;}
+  table.style-table .range-cell{display:flex;align-items:center;gap:6px;min-width:120px;}
+  table.style-table .range-cell input[type=range]{flex:1;accent-color:var(--accent);}
+  table.style-table .range-cell output{
+    font-family:var(--mono);font-size:11px;color:var(--sub);width:22px;text-align:right;
+  }
+
+  .toggle-btns{display:flex;gap:8px;flex-wrap:wrap;}
+  button.pill{
+    font-family:var(--mono);
+    font-size:11px;
+    padding:5px 12px;
+    border:1px solid var(--ink);
+    background:#fff;
+    color:var(--ink);
+    border-radius:20px;
+    cursor:pointer;
+  }
+  button.pill:hover{background:var(--ink);color:#fff;}
+  button.pill.active{background:var(--ink);color:#fff;}
+
+  /* --- chart panels --- */
+  .chart-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .chart-head h3{
+    font-size:14px;
+    margin:0;
+    font-weight:700;
+  }
+  .chart-head .desc{
+    font-size:11.5px;
+    color:var(--sub);
+  }
+  .export-btns{display:flex;gap:6px;}
+  button.small{
+    font-family:var(--mono);
+    font-size:10.5px;
+    padding:4px 9px;
+    border:1px solid var(--line);
+    background:#fafaf7;
+    color:var(--ink);
+    border-radius:4px;
+    cursor:pointer;
+  }
+  button.small:hover{border-color:var(--ink);}
+
+  .chart-box{
+    width:100%;
+    overflow-x:auto;
+  }
+  svg.chart{
+    width:100%;
+    height:auto;
+    display:block;
+    background:#fff;
+  }
+  .axis-label{font-size:11px;fill:var(--sub);font-family:var(--mono);}
+  .grid-line{stroke:#e9e7e0;stroke-width:1;}
+  .zero-line{stroke:#c9c6bc;stroke-width:1;}
+  .series-line{fill:none;}
+  .series-point{stroke:#fff;stroke-width:1.2;}
+  .legend-text{font-size:12px;fill:var(--ink);font-family:inherit;}
+  .value-label{font-size:10px;fill:var(--sub);font-family:var(--mono);}
+
+  table.data-table{
+    width:100%;
+    border-collapse:collapse;
+    font-family:var(--mono);
+    font-size:11.5px;
+    margin-top:14px;
+  }
+  table.data-table th, table.data-table td{
+    border:1px solid var(--line);
+    padding:5px 7px;
+    text-align:right;
+    white-space:nowrap;
+  }
+  table.data-table th:first-child, table.data-table td:first-child{
+    text-align:left;
+    background:#fafaf7;
+  }
+  table.data-table thead th{background:#f0efe9;}
+  .table-wrap{overflow-x:auto;}
+  details.table-toggle{margin-top:14px;}
+  details.table-toggle summary{
+    cursor:pointer;
+    font-size:12px;
+    font-weight:700;
+    color:var(--accent);
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:40px 20px;
+    color:var(--sub);
+    font-size:13px;
+  }
+  .empty-state .big{font-size:28px;display:block;margin-bottom:8px;}
+
+  footer.note{
+    border-top:1px solid var(--line);
+    margin-top:30px;
+    padding-top:16px;
+    font-size:11px;
+    color:var(--sub);
+    line-height:1.7;
+    white-space:pre-line;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page">
+    <div class="eyebrow">AMR Surveillance / Time-series Viewer</div>
+    <h1>緑膿菌（<i>Pseudomonas aeruginosa</i>）耐性率の時系列グラフ</h1>
+    <p>CSVを手動で読み込み、全体に占める割合およびPA内での耐性割合を折れ線グラフで表示します。表示範囲・系列はグラフごとに調整可能で、SVG／PNGとしてエクスポートできます。</p>
+  </header>
+
+  <section class="panel">
+    <h2 class="panel-title"><span class="num">1</span>データ読み込み</h2>
+    <div class="ctrl-row">
+      <div class="ctrl-group">
+        <label class="title" for="csvFile">CSVファイルを選択</label>
+        <input type="file" id="csvFile" accept=".csv,text/csv">
+        <div id="fileStatus" class="file-status">未読み込み：分離菌数（分母）と PA / CRPA / MDRP の菌株数（分子）を含むCSVを選択してください。</div>
+      </div>
+      <div class="ctrl-group">
+        <label class="title">想定するCSV形式</label>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--sub);max-width:420px;">
+          1列目=項目名（all, PA, CRPA, MDRP）／2列目以降=年（列見出し）の値<br>
+          例）,2007,2008,...<br>&nbsp;&nbsp;&nbsp;all,364818,930861,...<br>&nbsp;&nbsp;&nbsp;PA,31348,75664,...
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="controlsPanel" style="display:none;">
+    <h2 class="panel-title"><span class="num">2</span>表示設定</h2>
+    <div class="ctrl-row">
+      <div class="ctrl-group">
+        <label class="title">表示年範囲</label>
+        <div class="range-inputs">
+          <select id="yearFrom"></select>
+          <span>〜</span>
+          <select id="yearTo"></select>
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <label class="title">Y軸スケール</label>
+        <div class="toggle-btns">
+          <button class="pill active" id="yAxisAuto" type="button">自動</button>
+          <button class="pill" id="yAxisFixed" type="button">0〜100%固定</button>
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <label class="title">データラベル</label>
+        <div class="toggle-btns">
+          <button class="pill" id="labelsToggle" type="button">数値を表示</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="chart1Panel" style="display:none;">
+    <div class="chart-head">
+      <div>
+        <h3>① 全分離株に占める割合（all を分母）</h3>
+        <div class="desc">PA / all、CRPA / all、MDRP / all（％）</div>
+      </div>
+      <div class="export-btns">
+        <button class="small" data-export="svg" data-target="chart1">SVGで保存</button>
+        <button class="small" data-export="png" data-target="chart1">PNGで保存</button>
+      </div>
+    </div>
+    <table class="style-table" id="chart1Styles"></table>
+    <div class="chart-box"><svg class="chart" id="chart1" viewBox="0 0 900 420"></svg></div>
+    <details class="table-toggle"><summary>数値データを表示</summary>
+      <div class="table-wrap"><table class="data-table" id="table1"></table></div>
+    </details>
+  </section>
+
+  <section class="panel" id="chart2Panel" style="display:none;">
+    <div class="chart-head">
+      <div>
+        <h3>② PA分離株に占める割合（PA を分母）</h3>
+        <div class="desc">CRPA / PA、MDRP / PA（％）</div>
+      </div>
+      <div class="export-btns">
+        <button class="small" data-export="svg" data-target="chart2">SVGで保存</button>
+        <button class="small" data-export="png" data-target="chart2">PNGで保存</button>
+      </div>
+    </div>
+    <table class="style-table" id="chart2Styles"></table>
+    <div class="chart-box"><svg class="chart" id="chart2" viewBox="0 0 900 420"></svg></div>
+    <details class="table-toggle"><summary>数値データを表示</summary>
+      <div class="table-wrap"><table class="data-table" id="table2"></table></div>
+    </details>
+  </section>
+
+  <section class="panel" id="emptyPanel">
+    <div class="empty-state">
+      <span class="big">▲</span>
+      CSVファイルを読み込むとグラフが表示されます。
+    </div>
+  </section>
+
+  <footer class="note">本テキストは AI（Claude, Anthropic）を用いて作成されました。内容には誤りが含まれる可能性があります。医療上の判断には必ず公式の教科書・文献・専門家の指導を参照してください。
+二次利用・再配布は自己責任のもとで可能です。その際、本注記の保持を推奨します。</footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- state ----------
+  let state = {
+    years: [],      // string[]
+    rows: {},        // {all:[], PA:[], CRPA:[], MDRP:[]}
+    fromIdx: 0,
+    toIdx: 0,
+    yMode: "auto",   // 'auto' | 'fixed'
+    showLabels: false,
+    // per-series style: show / color / dash(true=点線) / width(px) / pointR(px, 0=非表示)
+    styles: {
+      chart1: {
+        PA:   {show:true, color:"#2e5f6e", dash:false, width:2.2, pointR:3.4},
+        CRPA: {show:true, color:"#b23a2f", dash:false, width:2.2, pointR:3.4},
+        MDRP: {show:true, color:"#c9862a", dash:false, width:2.2, pointR:3.4}
+      },
+      chart2: {
+        CRPA: {show:true, color:"#7a4a8a", dash:false, width:2.2, pointR:3.4},
+        MDRP: {show:true, color:"#3f7d4a", dash:false, width:2.2, pointR:3.4}
+      }
+    }
+  };
+
+  const REQUIRED_KEYS = ["all","PA","CRPA","MDRP"];
+
+  const SERIES_DEF = {
+    PA:   {label:"PA / all"},
+    CRPA: {label:"CRPA / all"},
+    MDRP: {label:"MDRP / all"}
+  };
+  const SERIES_DEF2 = {
+    CRPA: {label:"CRPA / PA"},
+    MDRP: {label:"MDRP / PA"}
+  };
+
+  // ---------- CSV parsing ----------
+  function parseCSV(text){
+    text = text.replace(/^\uFEFF/, "");
+    const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
+    if(lines.length < 2) throw new Error("データ行が不足しています。");
+    const header = splitCSVLine(lines[0]);
+    const years = header.slice(1).map(s => s.trim());
+    const rows = {};
+    for(let i = 1; i < lines.length; i++){
+      const cells = splitCSVLine(lines[i]);
+      const key = cells[0].trim();
+      if(!key) continue;
+      rows[key] = cells.slice(1).map(v => {
+        const n = parseFloat(v);
+        return isNaN(n) ? null : n;
+      });
+    }
+    return {years, rows};
+  }
+
+  function splitCSVLine(line){
+    // simple CSV split supporting basic quoted fields
+    const out = [];
+    let cur = "", inQuotes = false;
+    for(let i = 0; i < line.length; i++){
+      const ch = line[i];
+      if(ch === '"'){
+        if(inQuotes && line[i+1] === '"'){ cur += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if(ch === ',' && !inQuotes){
+        out.push(cur); cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  function findKey(rows, name){
+    // case-insensitive match
+    const keys = Object.keys(rows);
+    const exact = keys.find(k => k === name);
+    if(exact) return exact;
+    const ci = keys.find(k => k.toLowerCase() === name.toLowerCase());
+    return ci || null;
+  }
+
+  // ---------- file handling ----------
+  const fileInput = document.getElementById("csvFile");
+  const fileStatus = document.getElementById("fileStatus");
+
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try{
+        const parsed = parseCSV(ev.target.result);
+        const mapped = {};
+        for(const req of REQUIRED_KEYS){
+          const k = findKey(parsed.rows, req);
+          if(!k) throw new Error(`必須の行「${req}」が見つかりません。`);
+          mapped[req] = parsed.rows[k];
+        }
+        const len = parsed.years.length;
+        for(const req of REQUIRED_KEYS){
+          if(mapped[req].length !== len) throw new Error(`行「${req}」の値の数が年の数と一致しません。`);
+        }
+        state.years = parsed.years;
+        state.rows = mapped;
+        state.fromIdx = 0;
+        state.toIdx = len - 1;
+
+        fileStatus.textContent = `読み込み成功：${file.name}（${parsed.years[0]}〜${parsed.years[len-1]}、${len}年分）`;
+        fileStatus.className = "file-status ok";
+
+        initControls();
+        document.getElementById("controlsPanel").style.display = "";
+        document.getElementById("chart1Panel").style.display = "";
+        document.getElementById("chart2Panel").style.display = "";
+        document.getElementById("emptyPanel").style.display = "none";
+        renderAll();
+      }catch(err){
+        fileStatus.textContent = "読み込みエラー：" + err.message;
+        fileStatus.className = "file-status err";
+      }
+    };
+    reader.onerror = () => {
+      fileStatus.textContent = "ファイルの読み込みに失敗しました。";
+      fileStatus.className = "file-status err";
+    };
+    reader.readAsText(file, "UTF-8");
+  });
+
+  // ---------- controls ----------
+  function initControls(){
+    const yearFrom = document.getElementById("yearFrom");
+    const yearTo = document.getElementById("yearTo");
+    yearFrom.innerHTML = "";
+    yearTo.innerHTML = "";
+    state.years.forEach((y, i) => {
+      const o1 = document.createElement("option"); o1.value = i; o1.textContent = y;
+      const o2 = document.createElement("option"); o2.value = i; o2.textContent = y;
+      yearFrom.appendChild(o1);
+      yearTo.appendChild(o2);
+    });
+    yearFrom.value = state.fromIdx;
+    yearTo.value = state.toIdx;
+
+    yearFrom.onchange = () => {
+      let v = parseInt(yearFrom.value, 10);
+      if(v > state.toIdx) v = state.toIdx;
+      state.fromIdx = v;
+      renderAll();
+    };
+    yearTo.onchange = () => {
+      let v = parseInt(yearTo.value, 10);
+      if(v < state.fromIdx) v = state.fromIdx;
+      state.toIdx = v;
+      renderAll();
+    };
+
+    // y axis mode
+    const btnAuto = document.getElementById("yAxisAuto");
+    const btnFixed = document.getElementById("yAxisFixed");
+    btnAuto.onclick = () => { state.yMode = "auto"; btnAuto.classList.add("active"); btnFixed.classList.remove("active"); renderAll(); };
+    btnFixed.onclick = () => { state.yMode = "fixed"; btnFixed.classList.add("active"); btnAuto.classList.remove("active"); renderAll(); };
+
+    // labels toggle
+    const btnLabels = document.getElementById("labelsToggle");
+    btnLabels.onclick = () => {
+      state.showLabels = !state.showLabels;
+      btnLabels.classList.toggle("active", state.showLabels);
+      btnLabels.textContent = state.showLabels ? "数値を非表示" : "数値を表示";
+      renderAll();
+    };
+
+    // series style table chart1 / chart2
+    buildStyleTable("chart1Styles", SERIES_DEF, state.styles.chart1, renderChart1AndTable);
+    buildStyleTable("chart2Styles", SERIES_DEF2, state.styles.chart2, renderChart2AndTable);
+
+    // export buttons
+    document.querySelectorAll("button[data-export]").forEach(btn => {
+      btn.onclick = () => {
+        const targetId = btn.getAttribute("data-target");
+        const type = btn.getAttribute("data-export");
+        if(type === "svg") exportSVG(targetId);
+        else exportPNG(targetId);
+      };
+    });
+  }
+
+  // builds an editable table: 表示 / 系列名 / 色 / 線種 / 太さ / 点の大きさ
+  function buildStyleTable(tableId, def, styleObj, onChange){
+    const table = document.getElementById(tableId);
+    table.innerHTML =
+      "<thead><tr>" +
+      "<th>表示</th><th>系列</th><th>色</th><th>線種</th><th>線の太さ</th><th>点の大きさ</th>" +
+      "</tr></thead>";
+    const tbody = document.createElement("tbody");
+    Object.keys(def).forEach(key => {
+      const s = styleObj[key];
+      const tr = document.createElement("tr");
+
+      // 表示チェック
+      const tdShow = document.createElement("td");
+      tdShow.className = "col-show";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = s.show;
+      cb.onchange = () => { s.show = cb.checked; onChange(); };
+      tdShow.appendChild(cb);
+
+      // 系列名
+      const tdLabel = document.createElement("td");
+      tdLabel.className = "col-label";
+      tdLabel.textContent = def[key].label;
+
+      // 色
+      const tdColor = document.createElement("td");
+      tdColor.className = "col-color";
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.value = s.color;
+      colorInput.oninput = () => { s.color = colorInput.value; onChange(); };
+      tdColor.appendChild(colorInput);
+
+      // 線種
+      const tdDash = document.createElement("td");
+      const dashSelect = document.createElement("select");
+      const optSolid = document.createElement("option");
+      optSolid.value = "solid"; optSolid.textContent = "実線";
+      const optDash = document.createElement("option");
+      optDash.value = "dash"; optDash.textContent = "点線";
+      dashSelect.appendChild(optSolid);
+      dashSelect.appendChild(optDash);
+      dashSelect.value = s.dash ? "dash" : "solid";
+      dashSelect.onchange = () => { s.dash = dashSelect.value === "dash"; onChange(); };
+      tdDash.appendChild(dashSelect);
+
+      // 線の太さ
+      const tdWidth = document.createElement("td");
+      const widthCell = document.createElement("div");
+      widthCell.className = "range-cell";
+      const widthRange = document.createElement("input");
+      widthRange.type = "range"; widthRange.min = "0.5"; widthRange.max = "8"; widthRange.step = "0.5";
+      widthRange.value = s.width;
+      const widthOut = document.createElement("output");
+      widthOut.textContent = s.width;
+      widthRange.oninput = () => { s.width = parseFloat(widthRange.value); widthOut.textContent = widthRange.value; onChange(); };
+      widthCell.appendChild(widthRange);
+      widthCell.appendChild(widthOut);
+      tdWidth.appendChild(widthCell);
+
+      // 点の大きさ
+      const tdPoint = document.createElement("td");
+      const pointCell = document.createElement("div");
+      pointCell.className = "range-cell";
+      const pointRange = document.createElement("input");
+      pointRange.type = "range"; pointRange.min = "0"; pointRange.max = "10"; pointRange.step = "0.5";
+      pointRange.value = s.pointR;
+      const pointOut = document.createElement("output");
+      pointOut.textContent = s.pointR;
+      pointRange.oninput = () => { s.pointR = parseFloat(pointRange.value); pointOut.textContent = pointRange.value; onChange(); };
+      pointCell.appendChild(pointRange);
+      pointCell.appendChild(pointOut);
+      tdPoint.appendChild(pointCell);
+
+      tr.appendChild(tdShow);
+      tr.appendChild(tdLabel);
+      tr.appendChild(tdColor);
+      tr.appendChild(tdDash);
+      tr.appendChild(tdWidth);
+      tr.appendChild(tdPoint);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  }
+
+  function renderAll(){
+    renderChart1AndTable();
+    renderChart2AndTable();
+  }
+
+  // ---------- derived data ----------
+  function computeRatio(numArr, denomArr){
+    return numArr.map((v, i) => {
+      const d = denomArr[i];
+      if(v == null || d == null || d === 0) return null;
+      return (v / d) * 100;
+    });
+  }
+
+  function getRangeYears(){
+    return state.years.slice(state.fromIdx, state.toIdx + 1);
+  }
+  function sliceRange(arr){
+    return arr.slice(state.fromIdx, state.toIdx + 1);
+  }
+
+  // ---------- chart rendering ----------
+  const PAD = {left:52, right:24, top:20, bottom:44};
+  const W = 900, H = 420;
+
+  function renderChart1AndTable(){
+    if(!state.years.length) return;
+    const years = getRangeYears();
+    const ratios = {
+      PA:   computeRatio(sliceRange(state.rows.PA),   sliceRange(state.rows.all)),
+      CRPA: computeRatio(sliceRange(state.rows.CRPA), sliceRange(state.rows.all)),
+      MDRP: computeRatio(sliceRange(state.rows.MDRP), sliceRange(state.rows.all))
+    };
+    const seriesList = Object.keys(SERIES_DEF)
+      .filter(k => state.styles.chart1[k].show)
+      .map(k => {
+        const s = state.styles.chart1[k];
+        return {key:k, label:SERIES_DEF[k].label, hex:s.color, dash:s.dash, width:s.width, pointR:s.pointR, values:ratios[k]};
+      });
+
+    drawLineChart("chart1", years, seriesList);
+    buildTable("table1", years, [
+      {label:"PA / all (%)", values:ratios.PA},
+      {label:"CRPA / all (%)", values:ratios.CRPA},
+      {label:"MDRP / all (%)", values:ratios.MDRP}
+    ]);
+  }
+
+  function renderChart2AndTable(){
+    if(!state.years.length) return;
+    const years = getRangeYears();
+    const ratios = {
+      CRPA: computeRatio(sliceRange(state.rows.CRPA), sliceRange(state.rows.PA)),
+      MDRP: computeRatio(sliceRange(state.rows.MDRP), sliceRange(state.rows.PA))
+    };
+    const seriesList = Object.keys(SERIES_DEF2)
+      .filter(k => state.styles.chart2[k].show)
+      .map(k => {
+        const s = state.styles.chart2[k];
+        return {key:k, label:SERIES_DEF2[k].label, hex:s.color, dash:s.dash, width:s.width, pointR:s.pointR, values:ratios[k]};
+      });
+
+    drawLineChart("chart2", years, seriesList);
+    buildTable("table2", years, [
+      {label:"CRPA / PA (%)", values:ratios.CRPA},
+      {label:"MDRP / PA (%)", values:ratios.MDRP}
+    ]);
+  }
+
+  function niceMax(v){
+    if(v <= 0) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(v)));
+    const norm = v / mag;
+    let n;
+    if(norm <= 1) n = 1;
+    else if(norm <= 2) n = 2;
+    else if(norm <= 5) n = 5;
+    else n = 10;
+    return n * mag;
+  }
+
+  function drawLineChart(svgId, years, seriesList){
+    const svg = document.getElementById(svgId);
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+    const plotW = W - PAD.left - PAD.right;
+    const plotH = H - PAD.top - PAD.bottom;
+
+    if(!years.length || !seriesList.length){
+      const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      t.setAttribute("x", W/2); t.setAttribute("y", H/2);
+      t.setAttribute("text-anchor", "middle");
+      t.setAttribute("fill", "#8a8680");
+      t.setAttribute("font-size", "13");
+      t.textContent = "表示する系列がありません";
+      svg.appendChild(t);
+      return;
+    }
+
+    // y domain
+    let yMax;
+    if(state.yMode === "fixed"){
+      yMax = 100;
+    } else {
+      let maxV = 0;
+      seriesList.forEach(s => s.values.forEach(v => { if(v != null && v > maxV) maxV = v; }));
+      yMax = niceMax(maxV * 1.15);
+    }
+    const yMin = 0;
+
+    const xForIdx = (i) => PAD.left + (years.length === 1 ? plotW/2 : (plotW * i / (years.length - 1)));
+    const yForVal = (v) => PAD.top + plotH - (plotH * (v - yMin) / (yMax - yMin));
+
+    const svgNS = "http://www.w3.org/2000/svg";
+    function el(tag, attrs){
+      const e = document.createElementNS(svgNS, tag);
+      for(const k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
+    }
+
+    // gridlines (y)
+    const gridCount = 5;
+    for(let g = 0; g <= gridCount; g++){
+      const val = yMin + (yMax - yMin) * g / gridCount;
+      const y = yForVal(val);
+      svg.appendChild(el("line", {
+        x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
+        class: g === 0 ? "zero-line" : "grid-line"
+      }));
+      const lbl = el("text", {x:PAD.left-8, y:y+4, "text-anchor":"end", class:"axis-label"});
+      lbl.textContent = (Math.round(val*10)/10) + "%";
+      svg.appendChild(lbl);
+    }
+
+    // x axis labels (thin out if many years)
+    const maxLabels = 14;
+    const step = Math.max(1, Math.ceil(years.length / maxLabels));
+    years.forEach((y, i) => {
+      if(i % step !== 0 && i !== years.length - 1) return;
+      const x = xForIdx(i);
+      const lbl = el("text", {x:x, y:H-PAD.bottom+18, "text-anchor":"middle", class:"axis-label"});
+      lbl.textContent = y;
+      svg.appendChild(lbl);
+      svg.appendChild(el("line", {x1:x, x2:x, y1:H-PAD.bottom, y2:H-PAD.bottom+4, stroke:"#c9c6bc"}));
+    });
+    // x axis baseline
+    svg.appendChild(el("line", {x1:PAD.left, x2:W-PAD.right, y1:H-PAD.bottom, y2:H-PAD.bottom, stroke:"#1a1a1a", "stroke-width":1}));
+
+    // series lines + points
+    seriesList.forEach(s => {
+      const width = s.width != null ? s.width : 2.2;
+      const pointR = s.pointR != null ? s.pointR : 3.4;
+      let d = "";
+      s.values.forEach((v, i) => {
+        if(v == null) return;
+        const x = xForIdx(i), y = yForVal(v);
+        d += (d === "" ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1) + " ";
+      });
+      if(d){
+        const lineAttrs = {
+          d:d.trim(), class:"series-line", stroke:s.hex,
+          "stroke-width":width, fill:"none",
+          "stroke-linecap":"round", "stroke-linejoin":"round"
+        };
+        if(s.dash){
+          // dash pattern scales gently with line width for a proportionate look
+          lineAttrs["stroke-dasharray"] = (width * 3.2).toFixed(1) + "," + (width * 2.2).toFixed(1);
+        }
+        svg.appendChild(el("path", lineAttrs));
+      }
+      if(pointR > 0){
+        s.values.forEach((v, i) => {
+          if(v == null) return;
+          const x = xForIdx(i), y = yForVal(v);
+          const c = el("circle", {cx:x, cy:y, r:pointR, class:"series-point", fill:s.hex});
+          const title = el("title", {});
+          title.textContent = `${s.label}: ${years[i]}年 ${v.toFixed(2)}%`;
+          c.appendChild(title);
+          svg.appendChild(c);
+          if(state.showLabels){
+            const t = el("text", {x:x, y:y-pointR-6, "text-anchor":"middle", class:"value-label"});
+            t.textContent = v.toFixed(1);
+            svg.appendChild(t);
+          }
+        });
+      } else if(state.showLabels){
+        // still show labels even if points are hidden
+        s.values.forEach((v, i) => {
+          if(v == null) return;
+          const x = xForIdx(i), y = yForVal(v);
+          const t = el("text", {x:x, y:y-9, "text-anchor":"middle", class:"value-label"});
+          t.textContent = v.toFixed(1);
+          svg.appendChild(t);
+        });
+      }
+    });
+
+    // legend
+    let lx = PAD.left;
+    const ly = 14;
+    seriesList.forEach(s => {
+      const legendLineY = ly - 4;
+      const lineAttrs = {
+        x1:lx, x2:lx+16, y1:legendLineY, y2:legendLineY,
+        stroke:s.hex, "stroke-width": s.width != null ? Math.max(s.width, 1.5) : 2.2,
+        "stroke-linecap":"round"
+      };
+      if(s.dash){
+        const w = s.width != null ? s.width : 2.2;
+        lineAttrs["stroke-dasharray"] = (w * 2.4).toFixed(1) + "," + (w * 1.8).toFixed(1);
+      }
+      svg.appendChild(el("line", lineAttrs));
+      const t = el("text", {x:lx+22, y:ly, class:"legend-text"});
+      t.textContent = s.label;
+      svg.appendChild(t);
+      lx += 22 + s.label.length * 7.2 + 22;
+    });
+  }
+
+  function buildTable(tableId, years, rows){
+    const table = document.getElementById(tableId);
+    let html = "<thead><tr><th>系列</th>";
+    years.forEach(y => html += `<th>${y}</th>`);
+    html += "</tr></thead><tbody>";
+    rows.forEach(r => {
+      html += `<tr><td>${r.label}</td>`;
+      r.values.forEach(v => {
+        html += `<td>${v == null ? "-" : v.toFixed(2)}</td>`;
+      });
+      html += "</tr>";
+    });
+    html += "</tbody>";
+    table.innerHTML = html;
+  }
+
+  // ---------- export ----------
+  function resolveCSSColors(svgClone){
+    // inline computed colors so exported file doesn't depend on external CSS vars
+    const computedRoot = getComputedStyle(document.documentElement);
+    const varMap = {
+      "--c-all": computedRoot.getPropertyValue("--c-all").trim(),
+      "--c-pa": computedRoot.getPropertyValue("--c-pa").trim(),
+      "--c-crpa": computedRoot.getPropertyValue("--c-crpa").trim(),
+      "--c-mdrp": computedRoot.getPropertyValue("--c-mdrp").trim()
+    };
+    return svgClone;
+  }
+
+  function exportSVG(svgId){
+    const original = document.getElementById(svgId);
+    const clone = original.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", W);
+    clone.setAttribute("height", H);
+
+    // inline style block matching chart classes so the standalone SVG renders identically
+    const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    styleEl.textContent = `
+      text{font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif;}
+      .axis-label{font-size:11px;fill:#5c5c58;}
+      .grid-line{stroke:#e9e7e0;stroke-width:1;}
+      .zero-line{stroke:#c9c6bc;stroke-width:1;}
+      .series-line{fill:none;}
+      .series-point{stroke:#fff;stroke-width:1.2;}
+      .legend-text{font-size:12px;fill:#1a1a1a;}
+      .value-label{font-size:10px;fill:#5c5c58;}
+      rect, text{shape-rendering:auto;}
+    `;
+    clone.insertBefore(styleEl, clone.firstChild);
+    clone.style.background = "#fff";
+    clone.setAttribute("style", "background:#fff;");
+
+    const serializer = new XMLSerializer();
+    let src = serializer.serializeToString(clone);
+    src = '<?xml version="1.0" standalone="no"?>\r\n' + src;
+    const blob = new Blob([src], {type:"image/svg+xml;charset=utf-8"});
+    downloadBlob(blob, svgId + ".svg");
+  }
+
+  function exportPNG(svgId){
+    const original = document.getElementById(svgId);
+    const clone = original.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    styleEl.textContent = `
+      text{font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif;}
+      .axis-label{font-size:11px;fill:#5c5c58;}
+      .grid-line{stroke:#e9e7e0;stroke-width:1;}
+      .zero-line{stroke:#c9c6bc;stroke-width:1;}
+      .series-line{fill:none;}
+      .series-point{stroke:#fff;stroke-width:1.2;}
+      .legend-text{font-size:12px;fill:#1a1a1a;}
+      .value-label{font-size:10px;fill:#5c5c58;}
+    `;
+    clone.insertBefore(styleEl, clone.firstChild);
+    clone.setAttribute("width", W);
+    clone.setAttribute("height", H);
+
+    const serializer = new XMLSerializer();
+    const src = serializer.serializeToString(clone);
+    const svgBlob = new Blob([src], {type:"image/svg+xml;charset=utf-8"});
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = W * scale;
+      canvas.height = H * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => downloadBlob(blob, svgId + ".png"));
+    };
+    img.src = url;
+  }
+
+  function downloadBlob(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+})();
+</script>
+</body>
+</html>
