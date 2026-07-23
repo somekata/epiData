@@ -235,6 +235,22 @@
     padding:0;border:1px solid var(--line);border-radius:4px;
     background:none;cursor:pointer;
   }
+  .axis-field input[type=color]{
+    width:34px;height:26px;
+    padding:0;border:1px solid var(--line);border-radius:4px;
+    background:none;cursor:pointer;
+  }
+  .axis-field select{
+    font-family:var(--mono);
+    font-size:12px;
+    padding:3px 5px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:#fff;
+    color:var(--ink);
+  }
+  .axis-field.checkbox-field{gap:8px;}
+  .axis-field.checkbox-field input[type=checkbox]{accent-color:var(--accent);}
   table.style-table select{width:100%;}
   table.style-table .range-cell{display:flex;align-items:center;gap:6px;min-width:120px;}
   table.style-table .range-cell input[type=range]{flex:1;accent-color:var(--accent);}
@@ -474,8 +490,14 @@
     yAutoRange: true, yMin: 0, yMax: 100,
     yTickAuto: true, yTickCount: 5,
     yLabelAuto: true, yLabelSize: 11,
+    yLabelColor: "#000000",
+    yLabelPercent: true,
     xLabelAuto: true, xLabelSize: 11,
-    xIntervalAuto: true, xInterval: 1
+    xLabelColor: "#000000",
+    xIntervalAuto: true, xInterval: 1,
+    gridShow: true, gridColor: "#e9e7e0",
+    xTickShow: true, xTickColor: "#c9c6bc",
+    legendPosition: "top-left" // 'top-left' | 'top-right' | 'bottom' | 'hidden'
   });
 
   let state = {
@@ -917,7 +939,54 @@
       return wrap;
     }
 
-    // Y軸 column
+    function colorField(labelText, getVal, setVal){
+      const wrap = document.createElement("div");
+      wrap.className = "axis-field";
+      const label = document.createElement("label");
+      label.className = "f-label";
+      label.textContent = labelText;
+      const input = document.createElement("input");
+      input.type = "color";
+      input.value = getVal();
+      input.oninput = () => { setVal(input.value); onChange(); };
+      wrap.appendChild(label);
+      wrap.appendChild(input);
+      return wrap;
+    }
+
+    function checkboxField(labelText, getVal, setVal){
+      const wrap = document.createElement("div");
+      wrap.className = "axis-field checkbox-field";
+      const label = document.createElement("label");
+      label.className = "f-label";
+      label.textContent = labelText;
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = getVal();
+      input.onchange = () => { setVal(input.checked); onChange(); };
+      wrap.appendChild(label);
+      wrap.appendChild(input);
+      return wrap;
+    }
+
+    function selectField(labelText, options, getVal, setVal){
+      const wrap = document.createElement("div");
+      wrap.className = "axis-field";
+      const label = document.createElement("label");
+      label.className = "f-label";
+      label.textContent = labelText;
+      const select = document.createElement("select");
+      options.forEach(([val, lbl]) => {
+        const opt = document.createElement("option");
+        opt.value = val; opt.textContent = lbl;
+        select.appendChild(opt);
+      });
+      select.value = getVal();
+      select.onchange = () => { setVal(select.value); onChange(); };
+      wrap.appendChild(label);
+      wrap.appendChild(select);
+      return wrap;
+    }
     const yCol = document.createElement("div");
     yCol.className = "axis-col";
     const yTitle = document.createElement("div");
@@ -994,6 +1063,18 @@
       () => axisState.yLabelAuto, v => axisState.yLabelAuto = v,
       {step:1, min:6, max:32}
     ));
+    yCol.appendChild(colorField("文字色",
+      () => axisState.yLabelColor, v => axisState.yLabelColor = v
+    ));
+    yCol.appendChild(checkboxField("%を表示",
+      () => axisState.yLabelPercent, v => axisState.yLabelPercent = v
+    ));
+    yCol.appendChild(checkboxField("補助線を表示",
+      () => axisState.gridShow, v => axisState.gridShow = v
+    ));
+    yCol.appendChild(colorField("補助線の色",
+      () => axisState.gridColor, v => axisState.gridColor = v
+    ));
 
     // X軸 column
     const xCol = document.createElement("div");
@@ -1008,14 +1089,36 @@
       () => axisState.xLabelAuto, v => axisState.xLabelAuto = v,
       {step:1, min:6, max:32}
     ));
+    xCol.appendChild(colorField("文字色",
+      () => axisState.xLabelColor, v => axisState.xLabelColor = v
+    ));
     xCol.appendChild(numberField("表示間隔(年)",
       () => axisState.xInterval, v => axisState.xInterval = Math.max(1, Math.round(v)),
       () => axisState.xIntervalAuto, v => axisState.xIntervalAuto = v,
       {step:1, min:1, max:20}
     ));
+    xCol.appendChild(checkboxField("補助目盛を表示",
+      () => axisState.xTickShow, v => axisState.xTickShow = v
+    ));
+    xCol.appendChild(colorField("補助目盛の色",
+      () => axisState.xTickColor, v => axisState.xTickColor = v
+    ));
+
+    // 凡例 column
+    const legendCol = document.createElement("div");
+    legendCol.className = "axis-col";
+    const legendTitle = document.createElement("div");
+    legendTitle.className = "axis-col-title";
+    legendTitle.textContent = "凡例";
+    legendCol.appendChild(legendTitle);
+    legendCol.appendChild(selectField("位置",
+      [["top-left","上（左寄せ）"],["top-right","上（右寄せ）"],["bottom","下"],["hidden","非表示"]],
+      () => axisState.legendPosition, v => axisState.legendPosition = v
+    ));
 
     container.appendChild(yCol);
     container.appendChild(xCol);
+    container.appendChild(legendCol);
   }
 
   function renderAll(){
@@ -1136,8 +1239,11 @@
     while(svg.firstChild) svg.removeChild(svg.firstChild);
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
+    const legendPos = axisState.legendPosition || "top-left";
+    const padBottom = PAD.bottom + (legendPos === "bottom" ? 28 : 0);
+
     const plotW = W - PAD.left - PAD.right;
-    const plotH = H - PAD.top - PAD.bottom;
+    const plotH = H - PAD.top - padBottom;
 
     if(!years.length || !seriesList.length){
       const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -1188,6 +1294,13 @@
 
     const yLabelSize = axisState.yLabelAuto ? 11 : axisState.yLabelSize;
     const xLabelSize = axisState.xLabelAuto ? 11 : axisState.xLabelSize;
+    const yLabelColor = axisState.yLabelColor || "#000000";
+    const xLabelColor = axisState.xLabelColor || "#000000";
+    const yLabelPercent = axisState.yLabelPercent !== false;
+    const gridShow = axisState.gridShow !== false;
+    const gridColor = axisState.gridColor || "#e9e7e0";
+    const xTickShow = axisState.xTickShow !== false;
+    const xTickColor = axisState.xTickColor || "#c9c6bc";
     const gridCount = axisState.yTickAuto ? 5 : axisState.yTickCount;
 
     const xForIdx = (i) => PAD.left + (years.length === 1 ? plotW/2 : (plotW * i / (years.length - 1)));
@@ -1216,30 +1329,34 @@
     if(isLog){
       yTickVals.forEach(val => {
         const y = yForVal(val);
-        svg.appendChild(el("line", {
-          x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
-          class: Math.abs(val - 1) < 1e-9 ? "zero-line" : "grid-line"
-        }));
+        if(gridShow){
+          svg.appendChild(el("line", {
+            x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
+            stroke:gridColor, "stroke-width": Math.abs(val - 1) < 1e-9 ? 1.4 : 1
+          }));
+        }
         const lbl = el("text", {
           x:PAD.left-8, y:y+4, "text-anchor":"end", class:"axis-label",
-          style:`font-size:${yLabelSize}px`
+          style:`font-size:${yLabelSize}px;fill:${yLabelColor}`
         });
-        lbl.textContent = formatAxisVal(val) + "%";
+        lbl.textContent = formatAxisVal(val) + (yLabelPercent ? "%" : "");
         svg.appendChild(lbl);
       });
     } else {
       for(let g = 0; g <= gridCount; g++){
         const val = yMin + (yMax - yMin) * g / gridCount;
         const y = yForVal(val);
-        svg.appendChild(el("line", {
-          x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
-          class: Math.abs(val) < 1e-9 ? "zero-line" : "grid-line"
-        }));
+        if(gridShow){
+          svg.appendChild(el("line", {
+            x1:PAD.left, x2:W-PAD.right, y1:y, y2:y,
+            stroke:gridColor, "stroke-width": Math.abs(val) < 1e-9 ? 1.4 : 1
+          }));
+        }
         const lbl = el("text", {
           x:PAD.left-8, y:y+4, "text-anchor":"end", class:"axis-label",
-          style:`font-size:${yLabelSize}px`
+          style:`font-size:${yLabelSize}px;fill:${yLabelColor}`
         });
-        lbl.textContent = formatAxisVal(val) + "%";
+        lbl.textContent = formatAxisVal(val) + (yLabelPercent ? "%" : "");
         svg.appendChild(lbl);
       }
     }
@@ -1251,15 +1368,17 @@
       if(i % step !== 0 && i !== years.length - 1) return;
       const x = xForIdx(i);
       const lbl = el("text", {
-        x:x, y:H-PAD.bottom+18, "text-anchor":"middle", class:"axis-label",
-        style:`font-size:${xLabelSize}px`
+        x:x, y:H-padBottom+18, "text-anchor":"middle", class:"axis-label",
+        style:`font-size:${xLabelSize}px;fill:${xLabelColor}`
       });
       lbl.textContent = y;
       svg.appendChild(lbl);
-      svg.appendChild(el("line", {x1:x, x2:x, y1:H-PAD.bottom, y2:H-PAD.bottom+4, stroke:"#c9c6bc"}));
+      if(xTickShow){
+        svg.appendChild(el("line", {x1:x, x2:x, y1:H-padBottom, y2:H-padBottom+4, stroke:xTickColor}));
+      }
     });
     // x axis baseline
-    svg.appendChild(el("line", {x1:PAD.left, x2:W-PAD.right, y1:H-PAD.bottom, y2:H-PAD.bottom, stroke:"#1a1a1a", "stroke-width":1}));
+    svg.appendChild(el("line", {x1:PAD.left, x2:W-PAD.right, y1:H-padBottom, y2:H-padBottom, stroke:"#1a1a1a", "stroke-width":1}));
 
     // series lines + points
     seriesList.forEach(s => {
@@ -1311,25 +1430,40 @@
     });
 
     // legend
-    let lx = PAD.left;
-    const ly = 14;
-    seriesList.forEach(s => {
-      const legendLineY = ly - 4;
-      const lineAttrs = {
-        x1:lx, x2:lx+16, y1:legendLineY, y2:legendLineY,
-        stroke:s.hex, "stroke-width": s.width != null ? Math.max(s.width, 1.5) : 2.2,
-        "stroke-linecap":"round"
-      };
-      if(s.dash){
-        const w = s.width != null ? s.width : 2.2;
-        lineAttrs["stroke-dasharray"] = (w * 2.4).toFixed(1) + "," + (w * 1.8).toFixed(1);
+    if(legendPos !== "hidden"){
+      function itemWidth(s){ return 22 + s.label.length * 7.2 + 22; }
+      const totalWidth = seriesList.reduce((acc, s) => acc + itemWidth(s), 0);
+
+      let lx, ly;
+      if(legendPos === "top-right"){
+        lx = Math.max(PAD.left, W - PAD.right - totalWidth);
+        ly = 14;
+      } else if(legendPos === "bottom"){
+        lx = Math.max(PAD.left, (W - totalWidth) / 2);
+        ly = H - 10;
+      } else { // top-left (default)
+        lx = PAD.left;
+        ly = 14;
       }
-      svg.appendChild(el("line", lineAttrs));
-      const t = el("text", {x:lx+22, y:ly, class:"legend-text"});
-      t.textContent = s.label;
-      svg.appendChild(t);
-      lx += 22 + s.label.length * 7.2 + 22;
-    });
+
+      seriesList.forEach(s => {
+        const legendLineY = ly - 4;
+        const lineAttrs = {
+          x1:lx, x2:lx+16, y1:legendLineY, y2:legendLineY,
+          stroke:s.hex, "stroke-width": s.width != null ? Math.max(s.width, 1.5) : 2.2,
+          "stroke-linecap":"round"
+        };
+        if(s.dash){
+          const w = s.width != null ? s.width : 2.2;
+          lineAttrs["stroke-dasharray"] = (w * 2.4).toFixed(1) + "," + (w * 1.8).toFixed(1);
+        }
+        svg.appendChild(el("line", lineAttrs));
+        const t = el("text", {x:lx+22, y:ly, class:"legend-text"});
+        t.textContent = s.label;
+        svg.appendChild(t);
+        lx += itemWidth(s);
+      });
+    }
   }
 
   function buildTable(tableId, years, rows){
